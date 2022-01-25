@@ -1,5 +1,6 @@
 #  coding: utf-8 
 import socketserver
+from os import path
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
@@ -28,19 +29,42 @@ import socketserver
 
 
 class MyWebServer(socketserver.BaseRequestHandler):
-    
-    def handle(self):
-        self.data = self.request.recv(1024).strip()
-        print ("Got a request of: %s\n" % self.data)
-        self.request.sendall(bytearray("OK",'utf-8'))
+
+	def handle(self):
+		rlist = self.request.recv(1024).decode().strip().split()
+		if not rlist:
+			self.request.sendall("HTTP/1.1 404 Not Found\r\n\r\n".encode())
+			return
+		if rlist[0] != "GET":
+			self.request.sendall("HTTP/1.1 405 Method Not Allowed\r\n\r\n".encode())
+			return
+		if '../' in rlist[1][1:]:
+			self.request.sendall("HTTP/1.1 404 Not Found\r\n\r\n".encode())
+			return
+		file_path = "./www/" + rlist[1][1:]
+		if path.isfile(file_path):
+			f = open(file_path,"r")
+			self.request.sendall(("HTTP/1.1 200 OK\r\nContent-Type: text/" + rlist[1][1:].split('.')[-1].strip() + "\r\n\r\n" + "\n".join(f.readlines())).encode())
+			f.close()
+		elif path.isdir(file_path):
+			if file_path[-1] != '/':
+				f = open("./www/index.html","r")
+				self.request.sendall(("HTTP/1.1 301 Moved Permanently Location: " + 'http://localhost:8080/www/' + file_path + "/" + "\r\nContent-Type: text/html\r\n\r\n" + "\n".join(f.readlines())).encode())
+				f.close()
+			else:
+				f = open("./www/index.html","r")
+				self.request.sendall(("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n" + "\n".join(f.readlines())).encode())
+				f.close()
+		else:
+			self.request.sendall("HTTP/1.1 404 Not Found\r\n\r\n".encode())
 
 if __name__ == "__main__":
-    HOST, PORT = "localhost", 8080
+	HOST, PORT = "localhost", 8080
 
-    socketserver.TCPServer.allow_reuse_address = True
-    # Create the server, binding to localhost on port 8080
-    server = socketserver.TCPServer((HOST, PORT), MyWebServer)
+	socketserver.TCPServer.allow_reuse_address = True
+	# Create the server, binding to localhost on port 8080
+	server = socketserver.TCPServer((HOST, PORT), MyWebServer)
 
-    # Activate the server; this will keep running until you
-    # interrupt the program with Ctrl-C
-    server.serve_forever()
+	# Activate the server; this will keep running until you
+	# interrupt the program with Ctrl-C
+	server.serve_forever()
